@@ -40,7 +40,8 @@ void setup() {
   server.on("/forwards20", [](){ handleMove(20); });    // [](){ handleMove(x); } is a lambda function that contains the code  
   server.on("/backwards5", [](){ handleMove(-5); });    // to be executed when the route is visited. These lambda functions call
   server.on("/backwards20", [](){ handleMove(-20); });  // handleMove(x) as soon as it's triggered.
-  server.on("/compass", handleCompass);                 // When requesting URL "/compass", call the handleCompass function
+  server.on("/compass", handleCompass); 
+  server.on("/find", handleDirection);               // When requesting URL "/compass", call the handleCompass function
 
 
   //  If someone tries to access a URL that does not exist (e.g. due to a typo), call the handleNotFound function
@@ -74,7 +75,15 @@ void handleMove(int distance) {
 void handleCompass() {
   if (server.hasArg("value")) {                     // Check if there is a "value" argument in the request URL
     String valueString = server.arg("value");       // Get the "value" argument from the URL
-    //Serial.println("Turn:" + valueString);          // Print the compass value to the serial monitor
+    Serial.println("Turn:" + valueString);          // Print the compass value to the serial monitor
+  }
+  server.send(200);
+}
+
+void handleDirection() {
+  if (server.hasArg("direction")) {
+    String dir = server.arg("direction");
+    Serial.println("find:" + dir);
   }
   server.send(200);
 }
