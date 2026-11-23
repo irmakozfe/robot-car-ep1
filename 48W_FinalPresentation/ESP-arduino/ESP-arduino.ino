@@ -26,7 +26,7 @@ uint16_t MagValues[3];
 
 const int ENC_PIN = 3;
 
-//JoyStick
+//JoyStick (js)
 const int JS_X = A8;
 const int JS_Y = A9;
 const int JS_B = 19;
@@ -35,10 +35,12 @@ bool buttonPressedFlag = false;
 unsigned long lastButtonPress = 0;
 
 int angleTol = 4;
+unsigned long lastLcdPrint = 0;
 
 // RunTime States
 float compassOffset = 0;
 bool jsControl = true;
+bool prevJsControl = true;
 
 float getPpcm(int speed) {
   return 49.62 + 182.16 * exp(-0.021354 * speed);
@@ -136,16 +138,21 @@ float normalize(int raw, bool invert) {
 }
 
 void lcdJs(float xN, float yN) {
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.println("JoyStick Mode");
-  //lcd.setCursor(0, 1);
-  lcd.print("X: ");
-  lcd.print(xN * 100);
-  lcd.println(" %    ");  
-  lcd.print("Y: ");
-  lcd.print(yN * 100);
-  lcd.println(" %    ");
+  if (millis() - lastLcdPrint > 200) {
+    lastLcdPrint = millis();
+
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("JoyStick Mode");
+    lcd.setCursor(0, 1);
+    lcd.print("X: ");
+    lcd.print(xN * 100);
+    lcd.print(" %");  
+    lcd.setCursor(0, 2);
+    lcd.print("Y: ");
+    lcd.print(yN * 100);
+    lcd.print(" %");
+  }
 }
 
 void loop() {
@@ -170,8 +177,8 @@ void loop() {
     }
 
     // controlling the car with Joystick
-    float xNormalized = normalize(jsValuesX, false);
-    float yNormalized = normalize(jsValuesY, true);
+    float xNormalized = normalize(jsValueX, false);
+    float yNormalized = normalize(jsValueY, true);
 
     float left  = yNormalized + xNormalized;
     float right = yNormalized - xNormalized;
@@ -197,6 +204,13 @@ void loop() {
 
     lcdJs(xNormalized, yNormalized);  
   } else {
+    // Empty Serial buffer when first change to ESP Mode
+    if (prevJsControl == true) {
+      while (Serial.available()) {
+        Serial.read();
+      }
+    }
+
     if (Serial.available() > 0) {
       String message = Serial.readStringUntil('\n');
       message.trim();                      
@@ -267,8 +281,31 @@ void loop() {
         if (colon_pos > -1) {
           int north_pos = message.indexOf("North");
           if (north_pos > -1) {
-            float deg = getCompDegree();
-            compassOffset = deg;
+              while (true) {
+              float deg = getCompDegree();
+              float diff = 360 - deg;
+
+              if (abs(diff) > angleTol) {
+                diff = fmod(diff + 540, 360.0) - 180;
+                
+                if (diff < 0) {
+                  digitalWrite(Motor_L_dir_pin, Motor_forward);
+                  digitalWrite(Motor_R_dir_pin, Motor_return);
+                  analogWrite(Motor_L_pwm_pin, 100);
+                  analogWrite(Motor_R_pwm_pin, 100);
+                } else {
+                  digitalWrite(Motor_L_dir_pin, Motor_return);
+                  digitalWrite(Motor_R_dir_pin, Motor_forward);
+                  analogWrite(Motor_L_pwm_pin, 100);
+                  analogWrite(Motor_R_pwm_pin, 100);
+
+                }
+              } else {
+                  analogWrite(Motor_L_pwm_pin, 0);
+                  analogWrite(Motor_R_pwm_pin, 0);
+                  break;
+              }
+            }
           }
         }
       }
@@ -278,6 +315,10 @@ void loop() {
           String stat = message.substring(colon_pos + 1);
           stat.trim();
           int targetDegree = stat.toInt();
+
+          float prevDeg = fmod(getCompDegree() - compassOffset + 360, 360.0);
+          float turned = 0;
+
           lcd.clear();
           lcd.setCursor(0, 3);
           lcd.print("TarDeg: ");
@@ -285,9 +326,14 @@ void loop() {
           int printCounter = 0;
           while (true) {
             float deg = fmod(getCompDegree() - compassOffset + 360, 360.0);
-            float diff = targetDegree - deg;
             
-            diff = fmod(diff + 900, 360.0) - 180;
+            float step = deg - prevDeg;
+            if (step > 180) step -= 360;
+            if (step < -180) step += 360;
+            turned += step;
+            prevDeg = deg;
+
+            float diff = targetDegree - turned;
             Serial.println(diff);
 
             if (abs(diff) > (float)angleTol) {
@@ -295,15 +341,12 @@ void loop() {
               if (diff < 0) {
                 digitalWrite(Motor_L_dir_pin, Motor_forward);
                 digitalWrite(Motor_R_dir_pin, Motor_return);
-                analogWrite(Motor_L_pwm_pin, 80);
-                analogWrite(Motor_R_pwm_pin, 80);
               } else {
                 digitalWrite(Motor_L_dir_pin, Motor_return);
                 digitalWrite(Motor_R_dir_pin, Motor_forward);
-                analogWrite(Motor_L_pwm_pin, 80);
-                analogWrite(Motor_R_pwm_pin, 80);
-
               }
+              analogWrite(Motor_L_pwm_pin, 80);
+              analogWrite(Motor_R_pwm_pin, 80);
             } else {
                 analogWrite(Motor_L_pwm_pin, 0);
                 analogWrite(Motor_R_pwm_pin, 0);
@@ -349,4 +392,5 @@ void loop() {
       }
     }
   }
+  prevJsControl = jsControl;
 }
