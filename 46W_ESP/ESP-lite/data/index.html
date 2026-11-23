@@ -21,7 +21,7 @@
 		It lets you choose a number between -360 and 360, with steps of 5. 
 		When you move the slider, it calls the updateCompass() function, 
 		and when you finish pressing and/or moving the mouse button, it calls the sendCompassValue() function.-->
-		<input type="range" min="-360" max="360" step="5" id="compassSlider" oninput="updateCompass(this.value)" onchange="sendCompassValue(this.value)" value="0"/>	
+		<input type="range" min="-360" max="360" step="5" id="compassSlider" oninput="updateCompass(this.value)" onpointerup="sendCompassValue(this.value)" value="0"/>	<!--onchange="sendCompassValue(this.value)" -->
 		<div id="compassValue">0°</div>		<!-- This shows the current/last requested compass turning value -->
 	<div class="north-wrapper">
 		<button class="button" onclick="findNorth()">FIND NORTH</button>
